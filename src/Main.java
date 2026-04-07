@@ -24,22 +24,21 @@ public class Main {
         boolean exit = false;
         while (!exit) {
             System.out.println();
-            System.out.println("=== Словари (учебный проект) ===");
-            System.out.println("1 — Просмотр содержимого обоих словарей");
-            System.out.println("2 — Работа со словарём");
-            System.out.println("0 — Выход");
+            System.out.println("1 - Просмотр содержимого обоих словарей");
+            System.out.println("2 - Работа со словарём");
+            System.out.println("0 - Выход");
             int choice = readIntInRange("Выберите пункт: ", 0, 2);
             switch (choice) {
-                case 1 -> viewBoth();
+                case 1 -> viewDics();
                 case 2 -> workOnDictionary();
                 case 0 -> exit = true;
                 default -> System.out.println("Неверный пункт.");
             }
         }
-        System.out.println("До свидания.");
+        System.out.println("Bye");
     }
 
-    private static void viewBoth() {
+    private static void viewDics() {
         System.out.println();
         printDictionaryBlock("Латинский словарь (ключ: 4 буквы)", latinDict);
         printDictionaryBlock("Цифровой словарь (ключ: 5 цифр)", digitDict);
@@ -62,10 +61,10 @@ public class Main {
         while (!back) {
             System.out.println();
             System.out.println("Выберите словарь:");
-            System.out.println("1 — Латинский (LATIN4)");
-            System.out.println("2 — Цифровой (DIGIT5)");
-            System.out.println("0 — Назад");
-            int d = readIntInRange("Пункт: ", 0, 2);
+            System.out.println("1 - Латинский (LATIN4)");
+            System.out.println("2 - Цифровой (DIGIT5)");
+            System.out.println("0 - Назад");
+            int d = readIntInRange("Выбор: ", 0, 2);
             if (d == 0) {
                 back = true;
                 continue;
@@ -81,32 +80,28 @@ public class Main {
         while (!back) {
             System.out.println();
             System.out.println("Словарь: " + dict.getDictType() + " | файл: " + filePath);
-            System.out.println("1 — Добавить запись");
-            System.out.println("2 — Найти по ключу");
-            System.out.println("3 — Удалить по ключу");
-            System.out.println("0 — Назад");
+            System.out.println("1 - Добавить запись");
+            System.out.println("2 - Найти по ключу");
+            System.out.println("3 - Удалить по ключу");
+            System.out.println("0 - Назад");
             int op = readIntInRange("Пункт: ", 0, 3);
             switch (op) {
                 case 1 -> {
-                    System.out.print("Ключ: ");
-                    String key = readLine();
-                    System.out.print("Значение: ");
-                    String value = readLine();
+                    String key = readLine("Ключ: ");
+                    String value = readLine("Значение: ");
                     if (dict.addEntry(key, value)) {
                         dict.save(filePath);
                     }
                 }
                 case 2 -> {
-                    System.out.print("Ключ: ");
-                    String key = readLine();
+                    String key = readLine("Ключ: ");
                     dict.findByKey(key).ifPresentOrElse(
                             v -> System.out.println("Найдено: " + v),
                             () -> System.out.println("Запись не найдена.")
                     );
                 }
                 case 3 -> {
-                    System.out.print("Ключ: ");
-                    String key = readLine();
+                    String key = readLine("Ключ: ");
                     if (dict.deleteByKey(key)) {
                         System.out.println("Удалено.");
                         dict.save(filePath);
@@ -121,8 +116,9 @@ public class Main {
     }
 
     /** Читает непустую строку (пустые строки игнорируются с напоминанием). */
-    private static String readLine() {
+    private static String readLine(String partOfDisc) {
         while (true) {
+            System.out.print(partOfDisc);
             String line = SCANNER.nextLine();
             if (line != null && !line.isEmpty()) {
                 return line;
@@ -145,12 +141,12 @@ public class Main {
             try {
                 int n = Integer.parseInt(raw.trim());
                 if (n < min || n > max) {
-                    System.out.println("Число должно быть от " + min + " до " + max + ".");
+                    System.out.println("Число должно быть от " + min + " до " + max);
                     continue;
                 }
                 return n;
             } catch (NumberFormatException e) {
-                System.out.println("Ожидалось целое число.");
+                System.out.println("Ожидалось целое число");
             }
         }
     }

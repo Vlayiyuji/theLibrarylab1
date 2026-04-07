@@ -125,11 +125,13 @@ public class DictionaryService {
         }
         if ("LATIN4".equals(dictType)) {
             if (!key.matches("[A-Za-z]{4}")) {
+                System.out.println("Ошибка ввода");
                 System.out.println("Ключ типа LATIN4: ровно 4 латинские буквы [A-Za-z].");
                 return false;
             }
         } else if ("DIGIT5".equals(dictType)) {
             if (!key.matches("[0-9]{5}")) {
+                System.out.println("Ошибка ввода");
                 System.out.println("Ключ типа DIGIT5: ровно 5 цифр [0-9].");
                 return false;
             }
