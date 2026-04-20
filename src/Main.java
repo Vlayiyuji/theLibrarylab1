@@ -1,25 +1,23 @@
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Scanner;
+import java.nio.file.*;
 
-/**
- * Консольное меню: два словаря (латинский и цифровой), безопасный ввод.
- */
 public class Main {
-
-    private static final String FILE_LATIN = "dictionary_latin4.json";
-    private static final String FILE_DIGIT = "dictionary_digit5.json";
 
     private static final Scanner SCANNER = new Scanner(System.in);
 
     private static DictionaryService latinDict;
     private static DictionaryService digitDict;
+    private static String sharedFilePath; // единый путь к файлу для обоих словарей
 
     public static void main(String[] args) {
+        sharedFilePath = readFilePath();
+
         latinDict = new DictionaryService("LATIN4");
         digitDict = new DictionaryService("DIGIT5");
-        latinDict.load(FILE_LATIN);
-        digitDict.load(FILE_DIGIT);
+        latinDict.load(sharedFilePath);
+        digitDict.load(sharedFilePath);
 
         boolean exit = false;
         while (!exit) {
@@ -35,7 +33,68 @@ public class Main {
                 default -> System.out.println("Неверный пункт.");
             }
         }
+
+        // === СОХРАНЕНИЕ ПРИ ВЫХОДЕ (ОБЪЕДИНЁННОЕ) ===
+        LinkedHashMap<String, String> combinedData = new LinkedHashMap<>();
+        combinedData.putAll(latinDict.getAllData());
+        combinedData.putAll(digitDict.getAllData());
+        DictionaryService.saveAllData(sharedFilePath, combinedData);
+        System.out.println("Данные сохранены в файл: " + sharedFilePath);
+
         System.out.println("Bye");
+    }
+
+    /**
+     * Запрос пути к файлу. Минимальная валидация: непустая строка.
+     * Файл может не существовать — он будет создан при первом сохранении.
+     */
+    private static String readFilePath() {
+        while (true) {
+            System.out.print("Введите путь к файлу словаря (JSON): ");
+            String path = SCANNER.nextLine().trim();
+
+            if (path.isEmpty()) {
+                System.out.println("Путь не может быть пустым. Повторите ввод.");
+                continue;
+            }
+
+            // Базовая проверка: путь не должен содержать недопустимых символов
+            try {
+                Path filePath = Path.of(path);
+
+                // Проверка расширения
+                String fileName = filePath.getFileName().toString().toLowerCase();
+                if (!fileName.endsWith(".json")) {
+                    System.out.println("Файл должен иметь расширение .json. Повторите ввод.");
+                    continue;
+                }
+
+                // Проверка существования файла
+                if (!Files.exists(filePath)) {
+                    System.out.println("Файл не существует: " + path);
+                    System.out.println("Повторите ввод с корректным путём.");
+                    continue;
+                }
+
+                // Проверка, что это обычный файл, а не директория
+                if (!Files.isRegularFile(filePath)) {
+                    System.out.println("Указанный путь не является файлом. Повторите ввод.");
+                    continue;
+                }
+
+                // Проверка прав на чтение
+                if (!Files.isReadable(filePath)) {
+                    System.out.println("Нет прав на чтение файла: " + path);
+                    continue;
+                }
+
+                // Все проверки пройдены
+                return path;
+
+            } catch (java.nio.file.InvalidPathException e) {
+                System.out.println("Некорректный формат пути. Повторите ввод.");
+            }
+        }
     }
 
     private static void viewDics() {
@@ -70,16 +129,15 @@ public class Main {
                 continue;
             }
             DictionaryService active = (d == 1) ? latinDict : digitDict;
-            String file = (d == 1) ? FILE_LATIN : FILE_DIGIT;
-            dictionarySubmenu(active, file);
+            dictionarySubmenu(active);
         }
     }
 
-    private static void dictionarySubmenu(DictionaryService dict, String filePath) {
+    private static void dictionarySubmenu(DictionaryService dict) {
         boolean back = false;
         while (!back) {
             System.out.println();
-            System.out.println("Словарь: " + dict.getDictType() + " | файл: " + filePath);
+            System.out.println("Словарь: " + dict.getDictType() + " | файл: " + sharedFilePath);
             System.out.println("1 - Добавить запись");
             System.out.println("2 - Найти по ключу");
             System.out.println("3 - Удалить по ключу");
@@ -90,7 +148,7 @@ public class Main {
                     String key = readLine("Ключ: ");
                     String value = readLine("Значение: ");
                     if (dict.addEntry(key, value)) {
-                        dict.save(filePath);
+                        System.out.println("Запись добавлена (будет сохранена при выходе).");
                     }
                 }
                 case 2 -> {
@@ -103,10 +161,9 @@ public class Main {
                 case 3 -> {
                     String key = readLine("Ключ: ");
                     if (dict.deleteByKey(key)) {
-                        System.out.println("Удалено.");
-                        dict.save(filePath);
+                        System.out.println("Удалено (будет сохранено при выходе).");
                     } else {
-                        System.out.println("Такого ключа нет.");
+                        System.out.println("Такого ключа нет или ключ не соответствует типу словаря.");
                     }
                 }
                 case 0 -> back = true;
@@ -115,10 +172,10 @@ public class Main {
         }
     }
 
-    /** Читает непустую строку (пустые строки игнорируются с напоминанием). */
-    private static String readLine(String partOfDisc) {
+    /** Читает непустую строку. */
+    private static String readLine(String prompt) {
         while (true) {
-            System.out.print(partOfDisc);
+            System.out.print(prompt);
             String line = SCANNER.nextLine();
             if (line != null && !line.isEmpty()) {
                 return line;
@@ -127,9 +184,7 @@ public class Main {
         }
     }
 
-    /**
-     * Целое число в диапазоне [min, max]; пустой/неверный ввод — сообщение и повтор.
-     */
+    /** Целое число в диапазоне [min, max]. */
     private static int readIntInRange(String prompt, int min, int max) {
         while (true) {
             System.out.print(prompt);

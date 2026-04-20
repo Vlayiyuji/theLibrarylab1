@@ -9,10 +9,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Сервис словаря: загрузка/сохранение в JSON и операции над данными.
- * Порядок записей задаётся LinkedHashMap (как в файле).
+ * Все записи хранятся в одном файле, фильтрация по типу ключа выполняется при доступе.
  */
 public class DictionaryService {
 
@@ -20,22 +21,18 @@ public class DictionaryService {
 
     /** Тип словаря: "LATIN4" или "DIGIT5". */
     private final String dictType;
-    private final LinkedHashMap<String, String> data = new LinkedHashMap<>();
+    /** Все загруженные записи из файла (в порядке вставки) */
+    private final LinkedHashMap<String, String> allData = new LinkedHashMap<>();
 
     public DictionaryService(String dictType) {
         this.dictType = dictType;
     }
 
-    /**
-     * Элемент JSON-массива: {"key":"...","value":"..."}.
-     * Поля public — для Jackson без лишних геттеров.
-     */
     public static class KeyValue {
         public String key;
         public String value;
 
-        public KeyValue() {
-        }
+        public KeyValue() {}
 
         public KeyValue(String key, String value) {
             this.key = key;
@@ -43,9 +40,13 @@ public class DictionaryService {
         }
     }
 
+    /**
+     * Загружает ВСЕ записи из файла, независимо от типа ключа.
+     * Некорректные записи (с дубликатами ключей) обрабатываются: последняя побеждает.
+     */
     public void load(String filePath) {
         Path path = Path.of(filePath);
-        data.clear();
+        allData.clear();
         if (!Files.exists(path)) {
             return;
         }
@@ -54,11 +55,10 @@ public class DictionaryService {
             if (json == null || json.isBlank()) {
                 return;
             }
-            List<KeyValue> list = MAPPER.readValue(json, new TypeReference<List<KeyValue>>() {
-            });
+            List<KeyValue> list = MAPPER.readValue(json, new TypeReference<List<KeyValue>>() {});
             for (KeyValue kv : list) {
                 if (kv != null && kv.key != null) {
-                    data.put(kv.key, kv.value != null ? kv.value : "");
+                    allData.put(kv.key, kv.value != null ? kv.value : "");
                 }
             }
         } catch (IOException e) {
@@ -66,13 +66,18 @@ public class DictionaryService {
         }
     }
 
+    /**
+     * Сохраняет в файл ТОЛЬКО записи, валидные для текущего типа словаря.
+     * Это предотвращает накопление "мусорных" записей в общем файле.
+     */
     public void save(String filePath) {
         try {
             List<KeyValue> list = new ArrayList<>();
-            for (Map.Entry<String, String> e : data.entrySet()) {
-                list.add(new KeyValue(e.getKey(), e.getValue()));
+            for (Map.Entry<String, String> e : allData.entrySet()) {
+                if (isValidKeyForCurrentDict(e.getKey())) {
+                    list.add(new KeyValue(e.getKey(), e.getValue()));
+                }
             }
-            // Один массив объектов в компактном JSON (порядок как в list)
             String json = MAPPER.writeValueAsString(list);
             Files.writeString(Path.of(filePath), json);
         } catch (IOException e) {
@@ -80,24 +85,36 @@ public class DictionaryService {
         }
     }
 
+    /**
+     * Поиск с фильтрацией: возвращает значение только если ключ валиден для текущего словаря.
+     */
     public Optional<String> findByKey(String key) {
-        return Optional.ofNullable(data.get(key));
-    }
-
-    public boolean deleteByKey(String key) {
-        return data.remove(key) != null;
+        if (!isValidKeyForCurrentDict(key)) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(allData.get(key));
     }
 
     /**
-     * Добавление пары ключ-значение. При неверном ключе — сообщение в консоль, без исключений.
-     *
+     * Удаление: удаляет запись только если ключ валиден для текущего словаря.
+     * @return true, если запись была найдена и удалена
+     */
+    public boolean deleteByKey(String key) {
+        if (!isValidKeyForCurrentDict(key)) {
+            return false;
+        }
+        return allData.remove(key) != null;
+    }
+
+    /**
+     * Добавление пары. Ключ должен соответствовать правилам текущего словаря.
      * @return true, если запись добавлена
      */
     public boolean addEntry(String key, String value) {
         if (!validateKey(key)) {
             return false;
         }
-        if (data.containsKey(key)) {
+        if (allData.containsKey(key)) {
             System.out.println("Запись с таким ключом уже существует.");
             return false;
         }
@@ -105,19 +122,64 @@ public class DictionaryService {
             System.out.println("Значение не может быть null.");
             return false;
         }
-        data.put(key, value);
+        allData.put(key, value);
         return true;
     }
 
-    /** Все пары в порядке вставки (для просмотра). */
+    /**
+     * Возвращает только записи, валидные для текущего типа словаря, в порядке вставки.
+     */
     public LinkedHashMap<String, String> getAllOrdered() {
-        return new LinkedHashMap<>(data);
+        return allData.entrySet().stream()
+                .filter(e -> isValidKeyForCurrentDict(e.getKey()))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (v1, v2) -> v1,
+                        LinkedHashMap::new
+                ));
+    }
+
+    // Получить ВСЕ данные (без фильтрации)
+    public LinkedHashMap<String, String> getAllData() {
+        return new LinkedHashMap<>(allData);
+    }
+
+    // Сохранить конкретный набор данных в файл
+    public static void saveAllData(String filePath, Map<String, String> data) {
+        try {
+            List<KeyValue> list = new ArrayList<>();
+            for (Map.Entry<String, String> e : data.entrySet()) {
+                list.add(new KeyValue(e.getKey(), e.getValue()));
+            }
+            String json = MAPPER.writeValueAsString(list);
+            Files.writeString(Path.of(filePath), json);
+        } catch (IOException e) {
+            System.out.println("Ошибка записи файла: " + e.getMessage());
+        }
     }
 
     public String getDictType() {
         return dictType;
     }
 
+
+    /**
+     * Проверка: соответствует ли ключ правилам текущего словаря.
+     */
+    private boolean isValidKeyForCurrentDict(String key) {
+        if (key == null) return false;
+        if ("LATIN4".equals(dictType)) {
+            return key.matches("[A-Za-z]{4}");
+        } else if ("DIGIT5".equals(dictType)) {
+            return key.matches("[0-9]{5}");
+        }
+        return false;
+    }
+
+    /**
+     * Валидация с выводом сообщений об ошибках (для addEntry).
+     */
     private boolean validateKey(String key) {
         if (key == null) {
             System.out.println("Ключ не может быть пустым (null).");
