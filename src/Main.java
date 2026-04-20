@@ -76,7 +76,7 @@ public class Main {
                     continue;
                 }
 
-                // Проверка, что это обычный файл, а не директория
+                // Проверка, что это обычный файл
                 if (!Files.isRegularFile(filePath)) {
                     System.out.println("Указанный путь не является файлом. Повторите ввод.");
                     continue;
@@ -88,7 +88,7 @@ public class Main {
                     continue;
                 }
 
-                // Все проверки пройдены
+                // Когда все проверки пройдены
                 return path;
 
             } catch (java.nio.file.InvalidPathException e) {
