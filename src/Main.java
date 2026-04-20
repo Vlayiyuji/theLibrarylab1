@@ -34,7 +34,7 @@ public class Main {
             }
         }
 
-        // === СОХРАНЕНИЕ ПРИ ВЫХОДЕ (ОБЪЕДИНЁННОЕ) ===
+        // сохранение изменений словарей при выходе
         LinkedHashMap<String, String> combinedData = new LinkedHashMap<>();
         combinedData.putAll(latinDict.getAllData());
         combinedData.putAll(digitDict.getAllData());
